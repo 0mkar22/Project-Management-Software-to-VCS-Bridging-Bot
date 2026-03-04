@@ -1,0 +1,14 @@
+{
+  "dependencies": {
+    "@mariozechner/pi-ai": "^0.55.4",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@octokit/rest": "^22.0.1",
+    "dotenv": "^17.3.1",
+    "libsodium-wrappers": "^0.8.2",
+    "process": "^0.11.10",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/libsodium-wrappers": "^0.7.14"
+  }
+}
