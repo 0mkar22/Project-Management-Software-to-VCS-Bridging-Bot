@@ -38,6 +38,8 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 Object.defineProperty(exports, "__esModule", { value: true });
 var dotenv = require("dotenv");
 var pi_ai_1 = require("@mariozechner/pi-ai");
+var rest_1 = require("@octokit/rest");
+var libsodium_wrappers_1 = require("libsodium-wrappers");
 // Load environment variables from the .env file
 dotenv.config();
 // ==========================================
@@ -48,8 +50,118 @@ function getBasecampHeaders() {
         "Authorization": "Bearer ".concat(process.env.BASECAMP_ACCESS_TOKEN),
         "Content-Type": "application/json",
         // Basecamp STRICTLY requires a User-Agent with contact info, or they block the request.
-        "User-Agent": "StandupBot/1.0 (your-email@yourcompany.com)"
+        "User-Agent": "StandupBot/1.0 (obhogate48@gmail.com)"
     };
+}
+function refreshBasecampToken() {
+    return __awaiter(this, void 0, void 0, function () {
+        var clientId, clientSecret, refreshToken, payload, response, data;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    clientId = process.env.BASECAMP_CLIENT_ID;
+                    clientSecret = process.env.BASECAMP_CLIENT_SECRET;
+                    refreshToken = process.env.BASECAMP_REFRESH_TOKEN;
+                    // 🔥 ADD THIS TEMPORARY LINE:
+                    console.log("DEBUG CREDS:", { clientId: clientId, clientSecret: clientSecret, refreshToken: !!refreshToken });
+                    if (!clientId || !clientSecret || !refreshToken) {
+                        throw new Error("Missing credentials for token renewal.");
+                    }
+                    console.log("🔄 Basecamp token expired. Attempting to refresh...");
+                    payload = new URLSearchParams({
+                        type: 'refresh',
+                        refresh_token: refreshToken,
+                        client_id: clientId,
+                        client_secret: clientSecret
+                    });
+                    return [4 /*yield*/, fetch('https://launchpad.37signals.com/authorization/token', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: payload.toString()
+                        })];
+                case 1:
+                    response = _a.sent();
+                    if (!response.ok) {
+                        throw new Error("Failed to refresh Basecamp token: ".concat(response.statusText));
+                    }
+                    return [4 /*yield*/, response.json()];
+                case 2:
+                    data = _a.sent();
+                    console.log("✅ Successfully generated a new Basecamp access token!");
+                    // 🔥 NEW: Update the environment variables in memory for the current run
+                    process.env.BASECAMP_ACCESS_TOKEN = data.access_token;
+                    process.env.BASECAMP_REFRESH_TOKEN = data.refresh_token;
+                    // 🔥 NEW: Save the new access token (and refresh token) securely to GitHub for tomorrow
+                    return [4 /*yield*/, updateGitHubSecret('BASECAMP_ACCESS_TOKEN', data.access_token)];
+                case 3:
+                    // 🔥 NEW: Save the new access token (and refresh token) securely to GitHub for tomorrow
+                    _a.sent();
+                    if (!data.refresh_token) return [3 /*break*/, 5];
+                    process.env.BASECAMP_REFRESH_TOKEN = data.refresh_token;
+                    return [4 /*yield*/, updateGitHubSecret('BASECAMP_REFRESH_TOKEN', data.refresh_token)];
+                case 4:
+                    _a.sent();
+                    _a.label = 5;
+                case 5: return [2 /*return*/, data.access_token];
+            }
+        });
+    });
+}
+// ==========================================
+// SECURE GITHUB SECRET UPDATER
+// ==========================================
+function updateGitHubSecret(secretName, secretValue) {
+    return __awaiter(this, void 0, void 0, function () {
+        var owner, repo, githubToken, octokit, publicKeyData, binkey, binsec, encBytes, encryptedValue, error_1;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    owner = process.env.REPO_OWNER;
+                    repo = process.env.REPO_NAME;
+                    githubToken = process.env.MY_GITHUB_PAT;
+                    if (!owner || !repo || !githubToken) {
+                        throw new Error("Missing GitHub configuration in environment variables.");
+                    }
+                    octokit = new rest_1.Octokit({ auth: githubToken });
+                    _a.label = 1;
+                case 1:
+                    _a.trys.push([1, 5, , 6]);
+                    return [4 /*yield*/, octokit.rest.actions.getRepoPublicKey({
+                            owner: owner,
+                            repo: repo,
+                        })];
+                case 2:
+                    publicKeyData = (_a.sent()).data;
+                    // 2. Encrypt the secret using libsodium
+                    return [4 /*yield*/, libsodium_wrappers_1.default.ready];
+                case 3:
+                    // 2. Encrypt the secret using libsodium
+                    _a.sent();
+                    binkey = libsodium_wrappers_1.default.from_base64(publicKeyData.key, libsodium_wrappers_1.default.base64_variants.ORIGINAL);
+                    binsec = libsodium_wrappers_1.default.from_string(secretValue);
+                    encBytes = libsodium_wrappers_1.default.crypto_box_seal(binsec, binkey);
+                    encryptedValue = libsodium_wrappers_1.default.to_base64(encBytes, libsodium_wrappers_1.default.base64_variants.ORIGINAL);
+                    // 3. Upload the newly encrypted secret
+                    return [4 /*yield*/, octokit.rest.actions.createOrUpdateRepoSecret({
+                            owner: owner,
+                            repo: repo,
+                            secret_name: secretName,
+                            encrypted_value: encryptedValue,
+                            key_id: publicKeyData.key_id,
+                        })];
+                case 4:
+                    // 3. Upload the newly encrypted secret
+                    _a.sent();
+                    console.log("\uD83D\uDD10 Successfully updated GitHub secret: ".concat(secretName));
+                    return [3 /*break*/, 6];
+                case 5:
+                    error_1 = _a.sent();
+                    console.error("\u274C Failed to update GitHub secret (".concat(secretName, "):"), error_1);
+                    throw error_1;
+                case 6: return [2 /*return*/];
+            }
+        });
+    });
 }
 // ==========================================
 // 2. FETCH DATA FROM BASECAMP (Option 1's 24h filter)
@@ -168,7 +280,7 @@ function postToDiscord(summaryMarkdown) {
 // ==========================================
 function main() {
     return __awaiter(this, void 0, void 0, function () {
-        var projectIdsString, projectIds, allProjectsData, _i, projectIds_1, projectId, data, summary, error_1;
+        var projectIdsString, projectIds, allProjectsData, _i, projectIds_1, projectId, data, summary, error_2;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0:
@@ -214,8 +326,8 @@ function main() {
                     console.log("✅ Standup posted successfully!");
                     return [3 /*break*/, 9];
                 case 8:
-                    error_1 = _a.sent();
-                    console.error("❌ Fatal Error in Standup Agent:", error_1);
+                    error_2 = _a.sent();
+                    console.error("❌ Fatal Error in Standup Agent:", error_2);
                     process.exit(1);
                     return [3 /*break*/, 9];
                 case 9: return [2 /*return*/];
