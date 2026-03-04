@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # 5. Run the script (Continuous Deployment / Execution)
+      # 4. Run the script (Continuous Deployment / Execution)
       - name: Run Standup Agent
         run: npx tsx index.ts
         env:
