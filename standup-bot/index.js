@@ -210,13 +210,16 @@ function generateStandupSummary(basecampData) {
         return __generator(this, function (_b) {
             switch (_b.label) {
                 case 0:
+                    if (!process.env.GEMINI_API_KEY) {
+                        throw new Error("Missing GEMINI_API_KEY in environment variables.");
+                    }
                     model = (0, pi_ai_1.getModel)('google', 'gemini-2.5-flash');
                     context = {
                         systemPrompt: "You are an upbeat, highly organized engineering project manager. \n        Your job is to read raw JSON event data from multiple Basecamp projects and write a combined daily standup summary for the team's Discord channel.\n        Ignore minor events like formatting changes or document tweaks.\n        Focus strictly on:\n        1. Tasks that were COMPLETED yesterday.\n        2. Tasks that are DUE today or were newly ASSIGNED.\n\n        Format the output in clean, readable Discord Markdown (using bolding and emojis). Group by Project.\n        Keep it concise and friendly. Do not include any introductory fluff or JSON blocks in your final output.",
                         messages: [
                             {
                                 role: 'user',
-                                content: "Here is the raw Basecamp data grouped by project for the last 24 hours: \n\n".concat(JSON.stringify(basecampData, null, 2)),
+                                content: "Here is the recent activity data:\n".concat(JSON.stringify(basecampData).substring(0, 3000)),
                                 timestamp: Date.now()
                             }
                         ]
@@ -231,10 +234,9 @@ function generateStandupSummary(basecampData) {
                             summaryText += block.text;
                         }
                     }
-                    if (!summaryText) {
+                    if (!summaryText.trim()) {
                         throw new Error("The AI model returned an empty summary.");
                     }
-                    console.log("\uD83E\uDDE0 AI processing complete. Generated ".concat(summaryText.length, " characters of Markdown."));
                     return [2 /*return*/, summaryText];
             }
         });

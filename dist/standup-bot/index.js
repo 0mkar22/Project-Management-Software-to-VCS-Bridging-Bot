@@ -161,7 +161,12 @@ async function fetchBasecampTasks(projectId) {
 // 3. PROCESS WITH AI (Option 1's strict parsing)
 // ==========================================
 async function generateStandupSummary(basecampData) {
+    if (!process.env.GEMINI_API_KEY) {
+        throw new Error("Missing GEMINI_API_KEY in environment variables.");
+    }
+    // Tell the pi-ai toolkit to use the official Google provider and your key
     const model = (0, pi_ai_1.getModel)('google', 'gemini-2.5-flash');
+    // Build the conversation context required by pi-ai
     const context = {
         systemPrompt: `You are an upbeat, highly organized engineering project manager. 
         Your job is to read raw JSON event data from multiple Basecamp projects and write a combined daily standup summary for the team's Discord channel.
@@ -175,23 +180,23 @@ async function generateStandupSummary(basecampData) {
         messages: [
             {
                 role: 'user',
-                content: `Here is the raw Basecamp data grouped by project for the last 24 hours: \n\n${JSON.stringify(basecampData, null, 2)}`,
+                content: `Here is the recent activity data:\n${JSON.stringify(basecampData).substring(0, 3000)}`,
                 timestamp: Date.now()
             }
         ]
     };
+    // Execute the completion
     const response = await (0, pi_ai_1.complete)(model, context);
-    // Extract the generated text from the response blocks
+    // pi-ai returns an array of content blocks; we need to extract the text
     let summaryText = "";
     for (const block of response.content) {
         if (block.type === 'text') {
             summaryText += block.text;
         }
     }
-    if (!summaryText) {
+    if (!summaryText.trim()) {
         throw new Error("The AI model returned an empty summary.");
     }
-    console.log(`🧠 AI processing complete. Generated ${summaryText.length} characters of Markdown.`);
     return summaryText;
 }
 // ==========================================
