@@ -11,6 +11,7 @@ on:
 jobs:
   run-standup:
     runs-on: ubuntu-latest
+    environment: secrets
 
     steps:
       # 1. Grab your code from the repository
@@ -34,12 +35,9 @@ jobs:
       # 5. Run the script (Continuous Deployment / Execution)
       - name: Run Standup Agent
         env:
-          # These use vars because they are in the bottom list
-          BASECAMP_PROJECT_IDS: ${{ vars.BASECAMP_PROJECT_IDS }}
-          REPO_NAME: ${{ vars.REPO_NAME }}
-          REPO_OWNER: ${{ vars.REPO_OWNER }}
-          
-          # These stay as secrets because they are in the top list
+          BASECAMP_PROJECT_IDS: ${{ secrets.BASECAMP_PROJECT_IDS }}
+          REPO_NAME: ${{ secrets.REPO_NAME }}
+          REPO_OWNER: ${{ secrets.REPO_OWNER }}
           BASECAMP_ACCOUNT_ID: ${{ secrets.BASECAMP_ACCOUNT_ID }}
           BASECAMP_ACCESS_TOKEN: ${{ secrets.BASECAMP_ACCESS_TOKEN }}
           BASECAMP_REFRESH_TOKEN: ${{ secrets.BASECAMP_REFRESH_TOKEN }}
