@@ -154,7 +154,6 @@ async function fetchBasecampTasks(projectId: string) {
 // 3. PROCESS WITH AI (Option 1's strict parsing)
 // ==========================================
 async function generateStandupSummary(basecampData: any): Promise<string> {
-    console.log("2️⃣ Processing data with AI...");
     
     if (!process.env.GEMINI_API_KEY) {
         throw new Error("Missing GEMINI_API_KEY in environment variables.");
