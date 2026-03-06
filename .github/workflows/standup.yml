@@ -1,9 +1,9 @@
 name: Daily Standup Agent
 
 on:
-  # This runs the script automatically at 3:30 UTC (9:00 AM IST) every weekday
+  # This runs the script automatically at 3:17 UTC (8:47 AM IST) every weekday
   schedule:
-    - cron: '50 4 * * *'
+    - cron: '17 3 * * 1-5'
   
   # This allows you to click a button in GitHub to run it manually anytime
   workflow_dispatch: 
