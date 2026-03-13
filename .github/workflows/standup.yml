@@ -45,4 +45,4 @@ jobs:
           BASECAMP_CLIENT_SECRET: ${{ secrets.BASECAMP_CLIENT_SECRET }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           MY_GITHUB_PAT: ${{ secrets.MY_GITHUB_PAT }}
-        run: node dist/standup-bot/index.js # Make sure this matches where tsc outputs your compiled code
+        run: node dist/standup-bot-Discord/index.js # Make sure this matches where tsc outputs your compiled code
