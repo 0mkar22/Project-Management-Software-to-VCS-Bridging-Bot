@@ -67,6 +67,21 @@ async function refreshBasecampToken(): Promise<string> {
     return data.access_token; 
 }
 
+// Add this helper function
+async function fetchAllActiveProjectIds(): Promise<string[]> {
+    const accountId = process.env.BASECAMP_ACCOUNT_ID;
+    const response = await fetch(`https://3.basecampapi.com/${accountId}/projects.json`, {
+        method: 'GET',
+        headers: getBasecampHeaders()
+    });
+
+    if (!response.ok) throw new Error("Failed to fetch projects list.");
+    
+    const projects = await response.json();
+    // Map through the projects and return just their IDs
+    return projects.map((proj: any) => proj.id.toString());
+}
+
 // ==========================================
 // SECURE GITHUB SECRET UPDATER
 // ==========================================
@@ -249,10 +264,7 @@ async function main() {
 
     try {
         // Parse project IDs from .env (comma-separated, e.g., "12345,67890")
-        const projectIdsString = process.env.BASECAMP_PROJECT_IDS;
-        if (!projectIdsString) throw new Error("Missing BASECAMP_PROJECT_IDS in .env file.");
-        
-        const projectIds = projectIdsString.split(',').map(id => id.trim());
+        const projectIds = await fetchAllActiveProjectIds();
         const allProjectsData: Record<string, any> = {};
 
         console.log("1️⃣ Fetching data from Basecamp projects...");
