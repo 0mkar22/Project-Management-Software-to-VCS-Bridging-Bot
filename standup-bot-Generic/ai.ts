@@ -92,7 +92,8 @@ export async function processGitHubWebhookWithAI(repoName: string, projectName: 
                 }
             }
         ],
-        tool_choice: "auto"
+        // 🚨 THE FIX: Force the AI to use the Basecamp tool every single time!
+        tool_choice: { type: "function", function: { name: "syncCommitToTask" } }
     });
 
     const aiMessage = response.choices[0].message;

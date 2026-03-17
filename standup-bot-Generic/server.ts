@@ -1,20 +1,42 @@
 import express from 'express';
 import * as dotenv from 'dotenv';
 import fs from 'fs';
+import { generateStandupSummary, processGitHubWebhookWithAI, processPMWebhookWithAI } from './ai';
 import { fetchAllActiveProjectIds, fetchBasecampTasks } from './basecamp';
-import { generateStandupSummary, processGitHubWebhookWithAI, processPMWebhookWithAI } from './ai'; 
 import { postToDiscord } from './discord';
-import { createIssue_GitHub } from './github';
 
 dotenv.config();
+
+// 🛡️ PRODUCTION CLEANUP 1: Fail-Fast Startup Checker
+const requiredEnvVars = ['OPENROUTER_API_KEY', 'BASECAMP_ACCOUNT_ID', 'MY_GITHUB_PAT', 'DISCORD_WEBHOOK_URL'];
+for (const envVar of requiredEnvVars) {
+    if (!process.env[envVar]) {
+        console.error(`🚨 FATAL ERROR: Missing required environment variable: ${envVar}`);
+        process.exit(1); // Kill the server immediately so it doesn't fail silently later
+    }
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-const rawConfig = fs.readFileSync('./config.json', 'utf-8');
-const config = JSON.parse(rawConfig);
+// 🛡️ PRODUCTION CLEANUP 2: Strict TypeScript Interfaces
+interface RepoMapping {
+    githubRepo: string;
+    pmProvider: string;
+    pmProjectName: string;
+}
+
+// Safely parse the config file
+let config: { authorized_repos: RepoMapping[] };
+try {
+    const rawConfig = fs.readFileSync('./config.json', 'utf-8');
+    config = JSON.parse(rawConfig);
+} catch (error) {
+    console.error(`🚨 FATAL ERROR: Could not read or parse config.json. Is the file formatted correctly?`);
+    process.exit(1);
+}
 
 app.get('/', (req, res) => {
     res.send('🤖 Tron Universal DevOps Router is Online.');
