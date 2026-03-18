@@ -122,11 +122,11 @@ export async function processGitHubWebhookWithAI(repoName: string, projectName: 
 
 
 // 🔥 THE NEW PM-TO-DEV AI ROUTER
-export async function processPMWebhookWithAI(pmProvider: string, eventDetails: string, creatorName: string, targetRepo: string) {
+export async function processPMWebhookWithAI(taskContent: string, repoName: string, taskId: string, pmProvider: string, creatorName: string, eventDetails: string) {
     console.log(`🧠 AI is analyzing a ${pmProvider.toUpperCase()} event from ${creatorName}...`);
 
     let response;
-    let retries = 3; // Tron will try up to 3 times!
+    let retries = 3;
 
     while (retries > 0) {
         try {
@@ -139,7 +139,8 @@ export async function processPMWebhookWithAI(pmProvider: string, eventDetails: s
                     },
                     { 
                         role: "user", 
-                        content: `User '${creatorName}' just triggered an event in ${pmProvider}. Details: ${eventDetails}. The target GitHub repository for this project is '${targetRepo}'.` 
+                        // 🛠️ FIX 1: We are now passing `taskContent` directly to the AI!
+                        content: `User '${creatorName}' created a task in ${pmProvider}. The task is: "${taskContent}". Additional details: ${eventDetails}. The target GitHub repo is '${repoName}'.` 
                     }
                 ],
                 tools: [
@@ -163,26 +164,21 @@ export async function processPMWebhookWithAI(pmProvider: string, eventDetails: s
                 tool_choice: "auto"
             });
             
-            // If the code makes it here, it succeeded! Break out of the retry loop.
             break; 
 
         } catch (error: any) {
             if (error.status === 429) {
-                console.log(`⚠️ AI Traffic Jam (429 Rate Limit). Retrying in 2 seconds... (${retries - 1} attempts left)`);
+                console.log(`⚠️ AI Traffic Jam. Retrying... (${retries - 1} attempts left)`);
                 retries--;
-                // Wait for 2000 milliseconds (2 seconds) before trying again
                 await new Promise(resolve => setTimeout(resolve, 2000));
             } else {
-                // If it's a different kind of error, throw it so we can see it
                 throw error;
             }
         }
     }
 
-    // 🛡️ THE FIX: Check if the response or choices are missing before trying to read them!
     if (!response || !response.choices || !response.choices[0]) {
-        console.error("❌ Unexpected AI Response:", JSON.stringify(response, null, 2));
-        return "Tron tried to sync the task, but the free AI model returned an invalid response. Please try again.";
+        return "Tron tried to sync the task, but the AI returned an invalid response.";
     }
 
     const aiMessage = response.choices[0].message;
@@ -191,18 +187,24 @@ export async function processPMWebhookWithAI(pmProvider: string, eventDetails: s
         const toolCall = aiMessage.tool_calls[0];
         
         if (toolCall.type === "function") {
-            console.log(`🤖 AI decided to use tool: ${toolCall.function.name}`);
-            
             try {
                 const args = JSON.parse(toolCall.function.arguments);
                 
                 if (toolCall.function.name === "createGitHubIssue") {
-                    const issueUrl = await createIssue_GitHub(args.repoName, args.title, args.body);
+                    
+                    // 1. Force the IDE to read it and print it to the terminal!
+                    console.log(`🔗 INJECTING BASECAMP ID: ${taskId}`);
+                    
+                    // 🚨 Make sure the HTML comment and the ${taskId} variable are actually inside the backticks!
+                    const bodyWithHiddenId = `${args.body}\n\n<!-- Basecamp Task ID: ${taskId} -->`;
+                    
+                    // 3. Send it to GitHub
+                    const issueUrl = await createIssue_GitHub(args.repoName, args.title, bodyWithHiddenId);
+                    
                     return `Successfully created GitHub Issue: ${issueUrl}`;
                 }
             } catch (parseError) {
-                console.error("❌ AI returned malformed JSON for the tool arguments.");
-                return "Tron tried to create an issue, but the free-tier AI generated invalid formatting. Please try again.";
+                return "Tron tried to create an issue, but the AI generated invalid JSON.";
             }
         }
     }

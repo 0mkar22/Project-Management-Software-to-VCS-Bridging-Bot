@@ -12,6 +12,9 @@ export async function createIssue_GitHub(repoName: string, title: string, body: 
     console.log(`🎯 Target Repo: ${repoName}`);
     console.log(`📝 Issue Title: ${title}`);
     
+    // 🚨 PRE-FLIGHT CHECK: Let's see EXACTLY what ai.ts handed us before sending it to GitHub!
+    console.log(`\n=== 🔍 RAW BODY PAYLOAD CHECK ===\n${body}\n=================================\n`);
+    
     // Authenticate using the PAT from your .env file
     const octokit = new Octokit({ auth: process.env.MY_GITHUB_PAT });
     const owner = process.env.REPO_OWNER; 

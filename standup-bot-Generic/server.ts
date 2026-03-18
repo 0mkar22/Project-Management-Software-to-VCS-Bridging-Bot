@@ -114,6 +114,7 @@ app.post('/pm-webhook/:provider', async (req, res) => {
     const creator = req.body.creator?.name || req.body.creator || "Someone";
     const projectName = req.body.recording?.bucket?.name || req.body.projectName;
     const taskContent = req.body.recording?.title || req.body.recording?.content || req.body.taskContent || "New item created";
+    const taskId = req.body.recording?.id || "unknown_id";
     
     // 🛡️ THE BOUNCER: Ignore everything except actual task creations!
     if (provider === "basecamp" && kind !== "todo_created") {
@@ -135,7 +136,16 @@ app.post('/pm-webhook/:provider', async (req, res) => {
             const eventDetails = `Event Type: ${kind}. Task Details: "${taskContent}"`;
             
             // Trigger the new AI function!
-            const aiResult = await processPMWebhookWithAI(provider, eventDetails, creator, mapping.githubRepo);
+            // const aiResult = await processPMWebhookWithAI(provider, eventDetails, creator, mapping.githubRepo);
+            // Pass the taskId as the third argument!
+            const aiResult = await processPMWebhookWithAI(
+            taskContent,         // 1st
+            mapping.githubRepo,  // 2nd
+            taskId,              // 3rd
+            provider,            // 4th
+            creator,             // 5th
+            taskContent          // 6th (using taskContent for eventDetails here)
+    );
             
             // Tell Discord what happened!
             let message = `📋 **${creator}** created a new task in **${projectName}** (${provider}).\n`;
