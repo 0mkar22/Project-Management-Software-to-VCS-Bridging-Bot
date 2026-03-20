@@ -15,47 +15,64 @@ export function getBasecampHeaders() {
     };
 }
 
-// 🔋 Keep both tokens in active memory!
 let activeAccessToken = process.env.BASECAMP_ACCESS_TOKEN;
 let activeRefreshToken = process.env.BASECAMP_REFRESH_TOKEN;
+let tokenRefreshPromise: Promise<boolean> | null = null; // 🔒 The Lock!
 
-// 🔄 THE AUTO-REFRESH ENGINE
+// 🔄 THE AUTO-REFRESH ENGINE (With Mutex Lock)
 async function refreshBasecampToken(): Promise<boolean> {
-    console.log(`\n🔄 [OAUTH] Access Token expired! Attempting to refresh...`);
-
-    const clientId = process.env.BASECAMP_CLIENT_ID;
-    const clientSecret = process.env.BASECAMP_CLIENT_SECRET;
-
-    if (!activeRefreshToken || !clientId || !clientSecret) {
-        console.error("❌ Missing OAuth credentials. Cannot refresh token.");
-        return false;
+    
+    // 🛑 THE MUTEX CHECK: If a refresh is already happening, just wait for it!
+    if (tokenRefreshPromise) {
+        console.log(`⏳ [OAUTH] Refresh already in progress. Waiting in line...`);
+        return tokenRefreshPromise;
     }
 
-    try {
-        // Use activeRefreshToken here, not process.env!
-        const response = await fetch(`https://launchpad.37signals.com/authorization/token?type=refresh&refresh_token=${activeRefreshToken}&client_id=${clientId}&client_secret=${clientSecret}`, {
-            method: 'POST'
-        });
+    console.log(`\n🔄 [OAUTH] Access Token expired! Attempting to refresh...`);
 
-        if (!response.ok) {
-            console.error(`❌ OAuth Refresh Failed. Status: ${response.status}`);
+    // 🔒 LOCK THE DOOR: Create the promise so other requests have to wait
+    tokenRefreshPromise = (async () => {
+        const clientId = process.env.BASECAMP_CLIENT_ID;
+        const clientSecret = process.env.BASECAMP_CLIENT_SECRET;
+
+        if (!activeRefreshToken || !clientId || !clientSecret) {
+            console.error("❌ Missing OAuth credentials. Cannot refresh token.");
+            tokenRefreshPromise = null; // 🔓 Unlock the door before leaving
             return false;
         }
 
-        const data = await response.json();
-        
-        // 🔋 Update BOTH tokens in memory!
-        activeAccessToken = data.access_token;
-        if (data.refresh_token) {
-            activeRefreshToken = data.refresh_token; 
+        try {
+            const response = await fetch(`https://launchpad.37signals.com/authorization/token?type=refresh&refresh_token=${activeRefreshToken}&client_id=${clientId}&client_secret=${clientSecret}`, {
+                method: 'POST'
+            });
+
+            if (!response.ok) {
+                console.error(`❌ OAuth Refresh Failed. Status: ${response.status}`);
+                tokenRefreshPromise = null; // 🔓 Unlock the door
+                return false;
+            }
+
+            const data = await response.json();
+            
+            // 🔋 Update BOTH tokens in memory!
+            activeAccessToken = data.access_token;
+            if (data.refresh_token) {
+                activeRefreshToken = data.refresh_token; 
+            }
+            
+            console.log(`✅ [OAUTH] Successfully generated new Access Token and Refresh Token!`);
+            
+            tokenRefreshPromise = null; // 🔓 Unlock the door
+            return true;
+
+        } catch (error: any) {
+            console.error(`❌ Error during token refresh: ${error.message}`);
+            tokenRefreshPromise = null; // 🔓 Unlock the door on error
+            return false;
         }
-        
-        console.log(`✅ [OAUTH] Successfully generated new Access Token and Refresh Token!`);
-        return true;
-    } catch (error: any) {
-        console.error(`❌ Error during token refresh: ${error.message}`);
-        return false;
-    }
+    })();
+
+    return tokenRefreshPromise;
 }
 
 // Brought over from your original index.ts!
@@ -154,21 +171,54 @@ export async function fetchBasecampTasks(projectId: string) {
 /**
  * BASECAMP ADAPTER: Updates a Basecamp project with GitHub commit details.
  */
-export async function syncCommitToTask_Basecamp(projectName: string, commitMessage: string, developerName: string) {
+// 🚨 Notice we added `isRetry: boolean = false` to the arguments!
+export async function syncCommitToTask_Basecamp(projectName: string, commitMessage: string, developerName: string, isRetry: boolean = false): Promise<string> {
     console.log(`\n⚙️ --- BASECAMP ADAPTER EXECUTED --- ⚙️`);
     console.log(`🎯 Searching Basecamp for Project: '${projectName}'...`);
 
     const accountId = process.env.BASECAMP_ACCOUNT_ID;
-    // We re-use the header function you wrote in Phase 1!
-    const headers = getBasecampHeaders();
+
+    // 🛡️ Ensure we have the account ID and the LIVE token in memory
+    if (!accountId || !activeAccessToken) {
+        console.error("❌ Missing BASECAMP_ACCOUNT_ID or Access Token.");
+        return "Failed: Missing credentials.";
+    }
 
     try {
-        // 1. Fetch all projects to find the matching ID
-        const projRes = await fetch(`https://3.basecampapi.com/${accountId}/projects.json`, { headers });
+        // 1. Fetch all projects using the active memory token
+        const projRes = await fetch(`https://3.basecampapi.com/${accountId}/projects.json`, { 
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${activeAccessToken}`,
+                'User-Agent': 'Tron Automation Agent (your@email.com)',
+                'Content-Type': 'application/json'
+            }
+        });
+
+        // 🛡️ THE INTERCEPTOR: Catch the 401 and self-heal!
+        if (projRes.status === 401 && !isRetry) {
+            console.log(`⚠️ Basecamp returned 401 Unauthorized during commit sync.`);
+            const refreshed = await refreshBasecampToken();
+            
+            if (refreshed) {
+                console.log(`🔄 Retrying commit sync with new token...`);
+                // Call itself again with the fresh token
+                return await syncCommitToTask_Basecamp(projectName, commitMessage, developerName, true); 
+            } else {
+                return "Failed: OAuth Token Expired and Refresh Failed."; 
+            }
+        }
+
+        // 🛡️ THE CRASH PREVENTER: Stop immediately if we didn't get a 200 OK
+        if (!projRes.ok) {
+            console.error(`❌ Basecamp API returned status: ${projRes.status}`);
+            return `Failed: Basecamp API error ${projRes.status}`;
+        }
+
         const projects = await projRes.json();
 
-        // Match the name exactly as it is written in config.json
-        const targetProject = projects.find((p: any) => p.name === projectName);
+        // Match the name (made case-insensitive to be extra safe)
+        const targetProject = projects.find((p: any) => p.name.toLowerCase() === projectName.toLowerCase());
 
         if (!targetProject) {
             console.log(`❌ Project '${projectName}' not found in Basecamp.`);
@@ -189,13 +239,16 @@ export async function syncCommitToTask_Basecamp(projectName: string, commitMessa
         const postUrl = campfire.url.replace('.json', '/lines.json');
         
         const messagePayload = {
-            // We removed the HTML tags and used standard line breaks (\n)
-            content: `🚀 ${developerName} just pushed code via GitHub:\n\n"${commitMessage}"`
+            content: `🚀 **${developerName}** just pushed code via GitHub:\n\n"${commitMessage}"`
         };
 
         const postRes = await fetch(postUrl, {
             method: 'POST',
-            headers: headers,
+            headers: {
+                'Authorization': `Bearer ${activeAccessToken}`, // Use live token here too!
+                'User-Agent': 'Tron Automation Agent (your@email.com)',
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify(messagePayload)
         });
 
@@ -204,12 +257,12 @@ export async function syncCommitToTask_Basecamp(projectName: string, commitMessa
             console.log(`------------------------------\n`);
             return "Successfully updated Basecamp.";
         } else {
-            console.log(`❌ Failed to post to Basecamp API.`);
+            console.error(`❌ Failed to post to Basecamp API. Status: ${postRes.status}`);
             return "Failed to post message to Basecamp Campfire.";
         }
 
-    } catch (error) {
-        console.error("❌ Basecamp API Error:", error);
+    } catch (error: any) {
+        console.error("❌ Basecamp API Error:", error.message);
         return "Failed to sync to Basecamp due to a server error.";
     }
 }

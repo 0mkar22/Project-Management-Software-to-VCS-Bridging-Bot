@@ -195,6 +195,12 @@ app.post('/pm-webhook/:provider', async (req, res) => {
     
     const kind = req.body.kind || "unknown_event";
     const creator = req.body.creator?.name || req.body.creator || "Someone";
+    
+    // 🛑 THE GHOST ECHO FILTER
+    if (creator === "Tron Automation Agent" || creator === "YOUR_BOTS_BASECAMP_NAME") {
+        console.log(`👻 Ghost Echo detected: Ignoring webhook triggered by Tron.`);
+        return res.status(200).send("Ignored Bot Event");
+    }
     const projectName = req.body.recording?.bucket?.name || req.body.projectName;
     const taskContent = req.body.recording?.title || req.body.recording?.content || req.body.taskContent || "New item created";
     const taskId = req.body.recording?.id || "unknown_id";
