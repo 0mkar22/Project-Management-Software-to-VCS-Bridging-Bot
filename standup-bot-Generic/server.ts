@@ -3,7 +3,7 @@ import * as dotenv from 'dotenv';
 import fs from 'fs';
 import crypto from 'crypto';
 import { generateStandupSummary, processGitHubWebhookWithAI, processPMWebhookWithAI } from './ai';
-import { completeTask_Basecamp, fetchAllActiveProjectIds, fetchBasecampTasks, searchBasecampProject } from './basecamp';
+import { completeTask_Basecamp, uncompleteTask_Basecamp, fetchAllActiveProjectIds, fetchBasecampTasks, searchBasecampProject } from './basecamp';
 import { postToDiscord } from './discord';
 
 dotenv.config();
@@ -136,12 +136,13 @@ app.post('/github-webhook', async (req, res) => {
             console.log(`⚠️ UNAUTHORIZED REPO (${repoName}). Blocked.`);
         }
     }
-    // 🎯 SCENARIO B: A Developer Closed an Issue
-    else if (githubEvent === 'issues' && req.body?.action === 'closed') {
-        console.log(`\n🚨 [GITHUB EVENT] Issue Closed: ${req.body?.issue?.title}`);
+    // 🎯 SCENARIO B: A Developer Closed OR Reopened an Issue
+    else if (githubEvent === 'issues' && ['closed', 'reopened'].includes(req.body?.action)) {
+        const action = req.body.action; // Will be either 'closed' or 'reopened'
+        console.log(`\n🚨 [GITHUB EVENT] Issue ${action.toUpperCase()}: ${req.body?.issue?.title}`);
         
         const issueBody = String(req.body?.issue?.body || "");
-        const repoName = req.body?.repository?.name; // ⬅️ Get the repo name from GitHub!
+        const repoName = req.body?.repository?.name; 
 
         // 🛡️ THE BULLETPROOF REGEX
         const regex = new RegExp("<!-- Basecamp Task ID: ([^>]+) -->", "i");
@@ -151,18 +152,22 @@ app.post('/github-webhook', async (req, res) => {
             const basecampTaskId = idMatch[1].trim(); 
             console.log(`🔗 Found tethered Basecamp Task ID: ${basecampTaskId}`);
             
-            // 🗺️ THE DYNAMIC LOOKUP: Check config.json for this repo
-            const mapping = config.authorized_repos.find(repo => repo.githubRepo === repoName);
+            const mapping = config.authorized_repos.find((repo: any) => repo.githubRepo === repoName);
             
             if (mapping && mapping.pmProvider === 'basecamp') {
                 console.log(`🔍 Looking up Basecamp Project ID for: '${mapping.pmProjectName}'...`);
                 
-                // Use your existing search function from basecamp.ts!
                 const basecampProjectId = await searchBasecampProject(mapping.pmProjectName);
 
                 if (basecampProjectId) {
-                    await completeTask_Basecamp(basecampProjectId, basecampTaskId);
-                    await postToDiscord(`✅ **Auto-Sync:** Issue *${req.body?.issue?.title}* was closed. Tron checked it off in Basecamp!`);
+                    // 🔀 THE FORK IN THE ROAD
+                    if (action === 'closed') {
+                        await completeTask_Basecamp(basecampProjectId, basecampTaskId);
+                        // postToDiscord(`✅ **Auto-Sync:** Issue *${req.body?.issue?.title}* was closed. Tron checked it off in Basecamp!`);
+                    } else if (action === 'reopened') {
+                        await uncompleteTask_Basecamp(basecampProjectId, basecampTaskId);
+                        // postToDiscord(`⚠️ **Auto-Sync:** Issue *${req.body?.issue?.title}* was REOPENED. Tron un-checked it in Basecamp!`);
+                    }
                 } else {
                     console.log(`❌ Could not find a Basecamp project named ${mapping.pmProjectName}`);
                 }

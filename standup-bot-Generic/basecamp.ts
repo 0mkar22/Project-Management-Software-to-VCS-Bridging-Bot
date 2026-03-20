@@ -317,6 +317,56 @@ export async function completeTask_Basecamp(projectId: string, taskId: string, i
     }
 }
 
+// 🚨 The "Undo" Function
+export async function uncompleteTask_Basecamp(projectId: string, taskId: string, isRetry: boolean = false): Promise<boolean> {
+    console.log(`\n⚙️ --- BASECAMP ADAPTER: UN-COMPLETING TASK --- ⚙️`);
+    console.log(`🎯 Target Project ID: ${projectId}`);
+    console.log(`✅ Target Task ID: ${taskId}`);
+
+    const accountId = process.env.BASECAMP_ACCOUNT_ID;
+
+    if (!accountId || !activeAccessToken) {
+        console.error("❌ Missing BASECAMP_ACCOUNT_ID or Access Token");
+        return false;
+    }
+
+    try {
+        const response = await fetch(`https://3.basecampapi.com/${accountId}/buckets/${projectId}/todos/${taskId}/completion.json`, {
+            method: 'DELETE', // 🗑️ The magic difference!
+            headers: {
+                'Authorization': `Bearer ${activeAccessToken}`, 
+                'Content-Type': 'application/json',
+                'User-Agent': 'Tron Automation Agent (your@email.com)'
+            }
+        });
+
+        // 🛡️ THE INTERCEPTOR: Catch the 401 and retry!
+        if (response.status === 401 && !isRetry) {
+            console.log(`⚠️ Basecamp returned 401 Unauthorized for Task Un-Completion.`);
+            const refreshed = await refreshBasecampToken();
+            
+            if (refreshed) {
+                console.log(`🔄 Retrying task un-completion with new token...`);
+                return await uncompleteTask_Basecamp(projectId, taskId, true); 
+            } else {
+                return false; 
+            }
+        }
+
+        // Basecamp often returns 204 No Content for a successful DELETE
+        if (response.ok || response.status === 204) {
+            console.log(`✅ Status: Task ${taskId} successfully un-checked in Basecamp!`);
+            return true;
+        } else {
+            console.error(`❌ Basecamp API returned status: ${response.status}`);
+            return false;
+        }
+    } catch (error: any) {
+        console.error(`❌ Failed to un-complete Basecamp task: ${error.message}`);
+        return false;
+    }
+}
+
 export async function searchBasecampProject(targetProjectName: string, isRetry: boolean = false): Promise<string | null> {
     console.log(`\n🎯 Searching Basecamp for Project: '${targetProjectName}'...`);
     
