@@ -422,3 +422,76 @@ export async function searchBasecampProject(targetProjectName: string, isRetry: 
         return null;
     }
 }
+
+// 📢 POST PR SUMMARY TO CAMPFIRE
+export async function postPRSummaryToBasecamp(projectName: string, prTitle: string, developerName: string, summary: string, prUrl: string, isRetry: boolean = false): Promise<boolean> {
+    console.log(`\n📢 --- ROUTING PR SUMMARY TO BASECAMP --- 📢`);
+    
+    const accountId = process.env.BASECAMP_ACCOUNT_ID;
+
+    if (!accountId || !activeAccessToken) {
+        console.error("❌ Missing BASECAMP_ACCOUNT_ID or Access Token.");
+        return false;
+    }
+
+    try {
+        const projRes = await fetch(`https://3.basecampapi.com/${accountId}/projects.json`, { 
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${activeAccessToken}`,
+                'User-Agent': 'Tron Automation Agent (your@email.com)'
+            }
+        });
+
+        // 🛡️ THE INTERCEPTOR: Catch the 401 and self-heal!
+        if (projRes.status === 401 && !isRetry) {
+            console.log(`⚠️ Basecamp returned 401 Unauthorized during PR sync.`);
+            const refreshed = await refreshBasecampToken();
+            if (refreshed) {
+                return await postPRSummaryToBasecamp(projectName, prTitle, developerName, summary, prUrl, true); 
+            }
+            return false;
+        }
+
+        if (!projRes.ok) return false;
+
+        const projects = await projRes.json();
+        const targetProject = projects.find((p: any) => p.name.toLowerCase() === projectName.toLowerCase());
+
+        if (!targetProject) {
+            console.log(`❌ Project '${projectName}' not found in Basecamp.`);
+            return false;
+        }
+
+        const campfire = targetProject.dock.find((tool: any) => tool.name === 'chat' || tool.name === 'campfire');
+        if (!campfire) return false;
+
+        const postUrl = campfire.url.replace('.json', '/lines.json');
+        
+        // 🎨 Format the message beautifully for the PMs
+        const messagePayload = {
+            content: `🧠 **Tron AI Update: New Pull Request**\n**Developer:** ${developerName}\n**Feature:** ${prTitle}\n\n**Executive Summary:**\n${summary}\n\n🔗 <a href="${prUrl}">View PR on GitHub</a>`
+        };
+
+        const postRes = await fetch(postUrl, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${activeAccessToken}`,
+                'User-Agent': 'Tron Automation Agent (your@email.com)',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(messagePayload)
+        });
+
+        if (postRes.ok) {
+            console.log(`✅ Status: Successfully dropped PR Summary into Basecamp Campfire!`);
+            return true;
+        } else {
+            console.error(`❌ Failed to post PR Summary to Basecamp.`);
+            return false;
+        }
+    } catch (error: any) {
+        console.error("❌ Basecamp API Error:", error.message);
+        return false;
+    }
+}

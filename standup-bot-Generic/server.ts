@@ -3,7 +3,7 @@ import * as dotenv from 'dotenv';
 import fs from 'fs';
 import crypto from 'crypto';
 import { generateStandupSummary, processGitHubWebhookWithAI, processPMWebhookWithAI,generatePRSummary } from './ai';
-import { completeTask_Basecamp, uncompleteTask_Basecamp, fetchAllActiveProjectIds, fetchBasecampTasks, searchBasecampProject } from './basecamp';
+import { completeTask_Basecamp, uncompleteTask_Basecamp, fetchAllActiveProjectIds, fetchBasecampTasks, searchBasecampProject, postPRSummaryToBasecamp } from './basecamp';
 import { postToDiscord } from './discord';
 import { cleanAndTruncateDiff } from './utils';
 
@@ -212,6 +212,16 @@ app.post('/github-webhook', async (req, res) => {
                 
                 // import { postToDiscord } from './discord'; // Make sure this is imported!
                 postToDiscord(finalMessage);
+
+                // 🗺️ 4. ROUTE IT TO BASECAMP!
+                const mapping = config.authorized_repos.find((repo: any) => repo.githubRepo === repoName);
+                
+                if (mapping && mapping.pmProvider === 'basecamp') {
+                    console.log(`🔍 Routing AI Summary to Basecamp Project: '${mapping.pmProjectName}'...`);
+                    await postPRSummaryToBasecamp(mapping.pmProjectName, prTitle, developerName, aiSummary, prUrl);
+                } else {
+                    console.log(`🤷‍♂️ Repo ${repoName} is not mapped to Basecamp in config.json. Skipping PM update.`);
+                }
                 
             } else {
                 console.error(`❌ Failed to download PR Diff. Status: ${diffResponse.status}`);
