@@ -2,9 +2,10 @@ import express from 'express';
 import * as dotenv from 'dotenv';
 import fs from 'fs';
 import crypto from 'crypto';
-import { generateStandupSummary, processGitHubWebhookWithAI, processPMWebhookWithAI } from './ai';
+import { generateStandupSummary, processGitHubWebhookWithAI, processPMWebhookWithAI,generatePRSummary } from './ai';
 import { completeTask_Basecamp, uncompleteTask_Basecamp, fetchAllActiveProjectIds, fetchBasecampTasks, searchBasecampProject } from './basecamp';
 import { postToDiscord } from './discord';
+import { cleanAndTruncateDiff } from './utils';
 
 dotenv.config();
 
@@ -22,6 +23,7 @@ const PORT = process.env.PORT || 3000;
 
 // 🛡️ THE IRON GATE: We must save the raw, unformatted payload for HMAC cryptography!
 app.use(express.json({
+    limit: '2mb',
     verify: (req: any, res, buf) => {
         req.rawBody = buf;
     }
@@ -179,6 +181,45 @@ app.post('/github-webhook', async (req, res) => {
             console.log(`🤷‍♂️ No hidden Basecamp ID found in this issue. Ignoring.`);
         }
     }
+    // 🎯 SCENARIO C: A Developer Opened a Pull Request
+    else if (githubEvent === 'pull_request' && req.body?.action === 'opened') {
+        const prTitle = req.body.pull_request.title;
+        const prUrl = req.body.pull_request.html_url;
+        const diffUrl = req.body.pull_request.diff_url; // 🔗 The goldmine!
+        const developerName = req.body.pull_request.user.login;
+        const repoName = req.body.repository.name;
+
+        console.log(`\n🚨 [GITHUB EVENT] Pull Request Opened: ${prTitle}`);
+        console.log(`📥 Fetching raw code changes from: ${diffUrl}`);
+
+        try {
+            // Fetch the raw .diff file from GitHub
+            // Note: If this is a private repo, we will need to add an Authorization header here later
+            const diffResponse = await fetch(diffUrl);
+            
+            if (diffResponse.ok) {
+                const rawDiff = await diffResponse.text();
+                console.log(`✅ Successfully downloaded PR Diff! Size: ${rawDiff.length} characters.`);
+                
+                // 1. Clean and Truncate the code
+                const safeDiff = cleanAndTruncateDiff(rawDiff);
+                
+                // 2. Send it to the AI for a PM Summary
+                const aiSummary = await generatePRSummary(prTitle, developerName, safeDiff);
+                
+                // 3. Post it to Discord (and eventually Basecamp Campfire!)
+                const finalMessage = `🚨 **New Pull Request by ${developerName}**\n**Title:** ${prTitle}\n\n**Tron's Executive Summary:**\n${aiSummary}\n\n🔗 [View PR on GitHub](${prUrl})`;
+                
+                // import { postToDiscord } from './discord'; // Make sure this is imported!
+                postToDiscord(finalMessage);
+                
+            } else {
+                console.error(`❌ Failed to download PR Diff. Status: ${diffResponse.status}`);
+            }
+        } catch (error: any) {
+            console.error(`❌ Error fetching PR Diff: ${error.message}`);
+        }
+    }
 });
 
 // ---------------------------------------------------------
@@ -255,6 +296,14 @@ app.post('/pm-webhook/:provider', async (req, res) => {
 });
 
 app.listen(PORT, () => {
+    // 🛟 GLOBAL SAFETY NET: Prevent the server from crashing if an unknown error occurs
+    process.on('uncaughtException', (error) => {
+    console.error('🚨 [CRITICAL] Uncaught Exception caught! Server stays alive.', error);
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+    console.error('🚨 [CRITICAL] Unhandled Promise Rejection caught! Server stays alive.', reason);
+    });
     console.log(`🚀 Tron Universal Router is awake at http://localhost:${PORT}`);
     console.log(`👂 Listening for VCS events at /github-webhook`);
     console.log(`👂 Listening for PM events at /pm-webhook/:provider`);
