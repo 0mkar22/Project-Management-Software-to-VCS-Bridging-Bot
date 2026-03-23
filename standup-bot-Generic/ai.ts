@@ -258,3 +258,5 @@ export async function generatePRSummary(prTitle: string, developerName: string, 
         return "Tron encountered an error while trying to summarize this PR.";
     }
 }
+
+// Test function to demonstrate the AI Router in action
