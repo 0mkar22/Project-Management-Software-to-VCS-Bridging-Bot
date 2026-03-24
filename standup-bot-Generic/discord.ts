@@ -6,7 +6,7 @@ export async function postToDiscord(messageMarkdown: string) {
     if (!webhookUrl) throw new Error("Missing DISCORD_WEBHOOK_URL");
 
     const payload = {
-        content: `**🌞 Hello, team!**\n\n${messageMarkdown}`,
+        content: `**😁 Hello, team!**\n\n${messageMarkdown}`,
         username: "Standup Bot", 
         avatar_url: "https://i.imgur.com/8nLFCVP.png" 
     };

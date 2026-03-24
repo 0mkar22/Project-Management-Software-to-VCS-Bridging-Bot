@@ -14,7 +14,6 @@ import { cleanAndTruncateDiff } from './utils';
 const adapterRegistry: Record<string, PMAdapter> = {
     'basecamp': BasecampAdapter,
     'jira': JiraAdapter,
-    // 'linear': LinearAdapter, <-- Next week, you just add one line here!
 };
 
 dotenv.config();
@@ -316,8 +315,6 @@ app.post('/pm-webhook/:provider', async (req, res) => {
 // ---------------------------------------------------------
 // ⏰ THE WEEKLY AGGREGATION ENGINE (Cron Job)
 // ---------------------------------------------------------
-// Cron Format: 'Minute Hour DayOfMonth Month DayOfWeek'
-// '0 17 * * 5' means exactly 5:00 PM on Friday.
 
 cron.schedule('0 17 * * 5', async () => {
     console.log('\n⏰ [CRON] Executing Weekly Aggregation Engine...');
@@ -347,7 +344,7 @@ cron.schedule('0 17 * * 5', async () => {
         }
     }
 }, {
-    timezone: "Asia/Kolkata" // 🇮🇳 THE FIX: Forces the server to use IST!
+    timezone: "Asia/Kolkata"
 });
 
 app.listen(PORT, () => {

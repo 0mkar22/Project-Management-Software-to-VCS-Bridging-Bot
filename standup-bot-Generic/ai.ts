@@ -19,7 +19,7 @@ export async function generateStandupSummary(basecampData: any): Promise<string>
     
     try {
         const response = await openai.chat.completions.create({
-            // 🔥 THE FIX: Use the auto-router to find ANY available free model!
+            // Use the auto-router to find ANY available free model!
             model: "openrouter/free", 
             messages: [
                 { 
@@ -92,7 +92,7 @@ export async function processGitHubWebhookWithAI(repoName: string, projectName: 
                 }
             }
         ],
-        // 🚨 THE FIX: Force the AI to use the Basecamp tool every single time!
+        // Force the AI to use the Basecamp tool every single time!
         tool_choice: { type: "function", function: { name: "syncCommitToTask" } }
     });
 
@@ -139,7 +139,7 @@ export async function processPMWebhookWithAI(taskContent: string, repoName: stri
                     },
                     { 
                         role: "user", 
-                        // 🛠️ FIX 1: We are now passing `taskContent` directly to the AI!
+                        // We are now passing `taskContent` directly to the AI!
                         content: `User '${creatorName}' created a task in ${pmProvider}. The task is: "${taskContent}". Additional details: ${eventDetails}. The target GitHub repo is '${repoName}'.` 
                     }
                 ],
@@ -213,7 +213,7 @@ export async function processPMWebhookWithAI(taskContent: string, repoName: stri
 }
 
 export async function generatePRSummary(prTitle: string, developerName: string, cleanedDiff: string): Promise<string> {
-    console.log(`\n🧠 --- TRON NLP: ANALYZING PULL REQUEST --- 🧠`);
+    console.log(`\n🧠 --- TRON: ANALYZING PULL REQUEST --- 🧠`);
     
     const prompt = `
     You are Tron, a Senior Technical Product Manager. 
@@ -260,7 +260,7 @@ export async function generatePRSummary(prTitle: string, developerName: string, 
 }
 
 export async function generateWeeklyChangelog(projectName: string, completedTasks: any[]): Promise<string> {
-    console.log(`\n🧠 --- TRON NLP: GENERATING WEEKLY CHANGELOG --- 🧠`);
+    console.log(`\n🧠 --- TRON: GENERATING WEEKLY CHANGELOG --- 🧠`);
     
     if (!completedTasks || completedTasks.length === 0) {
         return `**Weekly Update:** No tasks were completed in ${projectName} this week.`;

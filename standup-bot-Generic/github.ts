@@ -3,10 +3,9 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-/**
+/*
  * GITHUB ADAPTER: Creates a new Issue in a specific repository.
- * The AI will trigger this when a PM creates a task in the project management tool.
- */
+*/
 export async function createIssue_GitHub(repoName: string, title: string, body: string): Promise<string> {
     console.log(`\n⚙️ --- GITHUB ADAPTER EXECUTED --- ⚙️`);
     console.log(`🎯 Target Repo: ${repoName}`);

@@ -23,7 +23,7 @@ let tokenRefreshPromise: Promise<boolean> | null = null; // 🔒 The Lock!
 // 🔄 THE AUTO-REFRESH ENGINE (With Mutex Lock)
 async function refreshBasecampToken(): Promise<boolean> {
     
-    // 🛑 THE MUTEX CHECK: If a refresh is already happening, just wait for it!
+    // THE MUTEX CHECK: If a refresh is already happening, just wait for it!
     if (tokenRefreshPromise) {
         console.log(`⏳ [OAUTH] Refresh already in progress. Waiting in line...`);
         return tokenRefreshPromise;
@@ -31,7 +31,7 @@ async function refreshBasecampToken(): Promise<boolean> {
 
     console.log(`\n🔄 [OAUTH] Access Token expired! Attempting to refresh...`);
 
-    // 🔒 LOCK THE DOOR: Create the promise so other requests have to wait
+    // LOCK THE DOOR: Create the promise so other requests have to wait
     tokenRefreshPromise = (async () => {
         const clientId = process.env.BASECAMP_CLIENT_ID;
         const clientSecret = process.env.BASECAMP_CLIENT_SECRET;
@@ -55,7 +55,7 @@ async function refreshBasecampToken(): Promise<boolean> {
 
             const data = await response.json();
             
-            // 🔋 Update BOTH tokens in memory!
+            // Update BOTH tokens in memory!
             activeAccessToken = data.access_token;
             if (data.refresh_token) {
                 activeRefreshToken = data.refresh_token; 
@@ -63,7 +63,7 @@ async function refreshBasecampToken(): Promise<boolean> {
             
             console.log(`✅ [OAUTH] Successfully generated new Access Token and Refresh Token!`);
             
-            // 💾 THE PRODUCTION FIX: Permanently save the new tokens to GitHub Secrets
+            // THE PRODUCTION FIX: Permanently save the new tokens to GitHub Secrets
             if (activeAccessToken) {
                 await updateGitHubSecret('BASECAMP_ACCESS_TOKEN', activeAccessToken);
             }
@@ -71,12 +71,12 @@ async function refreshBasecampToken(): Promise<boolean> {
                 await updateGitHubSecret('BASECAMP_REFRESH_TOKEN', activeRefreshToken);
             }
             
-            tokenRefreshPromise = null; // 🔓 Unlock the door
+            tokenRefreshPromise = null; // Unlock the door
             return true;
 
         } catch (error: any) {
             console.error(`❌ Error during token refresh: ${error.message}`);
-            tokenRefreshPromise = null; // 🔓 Unlock the door on error
+            tokenRefreshPromise = null; // Unlock the door on error
             return false;
         }
     })();
@@ -122,7 +122,7 @@ export async function fetchAllActiveProjectIds(): Promise<string[]> {
         headers: getBasecampHeaders()
     });
 
-    // 🔥 THE FIX: Catch the 401, refresh, and retry!
+    // THE FIX: Catch the 401, refresh, and retry!
     if (response.status === 401) {
         console.log(`⚠️ 401 Unauthorized detected. Refreshing token...`);
         await refreshBasecampToken(); 
@@ -151,7 +151,7 @@ export async function fetchBasecampTasks(projectId: string) {
         headers: getBasecampHeaders()
     });
 
-    // 🔥 Catch the 401 here too just in case!
+    // Catch the 401 here too just in case!
     if (response.status === 401) {
         await refreshBasecampToken();
         response = await fetch(`${baseUrl}/timeline.json`, {
