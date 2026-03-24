@@ -1,3 +1,4 @@
+import path from 'path';
 import express from 'express';
 import * as dotenv from 'dotenv';
 import fs from 'fs';
@@ -48,7 +49,9 @@ interface RepoMapping {
 // Safely parse the config file
 let config: { authorized_repos: RepoMapping[] };
 try {
-    const rawConfig = fs.readFileSync('./config.json', 'utf-8');
+    // 🛡️ THE FIX: __dirname guarantees it always looks in the exact same folder as server.ts!
+    const configPath = path.join(__dirname, 'config.json'); 
+    const rawConfig = fs.readFileSync(configPath, 'utf-8');
     config = JSON.parse(rawConfig);
 } catch (error) {
     console.error(`🚨 FATAL ERROR: Could not read or parse config.json. Is the file formatted correctly?`);
@@ -252,6 +255,9 @@ app.post('/pm-webhook/:provider', async (req, res) => {
     // 🛑 THE UNIVERSAL IRON GATE
     const providedToken = req.query.token;
     const expectedToken = process.env.UNIVERSAL_WEBHOOK_SECRET;
+
+    // Print exact values with single quotes around them to catch invisible spaces!
+    // console.log(`🕵️ DEBUG: Basecamp sent: '${providedToken}' | Tron expected: '${expectedToken}'`);
 
     if (!providedToken || providedToken !== expectedToken) {
         console.error(`🚨 INTRUDER ALERT: Unauthorized access attempt to /pm-webhook/${req.params.provider}`);
